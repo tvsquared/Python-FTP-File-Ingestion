@@ -5,8 +5,8 @@ SSH_OK = False
 SFTP_OK = False
 
 # ftp credentials
-FTP_HOST = "<ftp host ip>"
-FTP_PORT = "<ftp port>"
+FTP_HOST = "192.168.15.123"
+FTP_PORT = "21"
 FTP_USERNAME = "<ftp username>"
 FTP_PASSWORD = "<ftp password>"
 
@@ -25,3 +25,26 @@ MULTIPART_THRESHOLD = 100 * MB
 MULTIPART_CHUNKSIZE=20 * MB
 MAX_CONCURRENCY=10
 USER_THREADS=True
+
+LOGGING_CONFIG = { 
+    'version': 1,
+    'formatters': { 
+        'standard': { 
+            'format': '%(asctime)s [%(levelname)s]: %(message)s'
+        },
+    },
+    'handlers': { 
+        'default': { 
+            'level': 'INFO',
+            'formatter': 'standard',
+            'class': 'logging.StreamHandler',
+            'stream': 'ext://sys.stdout',  # Default is stderr
+        },
+    },
+    'loggers': { 
+        'python_glue_ingestion_job': {
+            'handlers': ['default'],
+            'level': 'DEBUG',
+        }
+    }
+}

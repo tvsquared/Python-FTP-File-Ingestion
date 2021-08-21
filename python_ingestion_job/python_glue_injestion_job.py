@@ -15,6 +15,8 @@ Following are the key features of this module:
 """
 
 import os
+import logging
+import logging.config
 import boto3
 import config as cfg
 from boto3.s3.transfer import TransferConfig
@@ -27,6 +29,14 @@ from datetime import datetime
 # reload(site)
 
 import paramiko
+
+log = logging.getLogger('python_glue_ingestion_job')
+
+try:
+    logging.config.dictConfig(cfg.LOGGING_CONFIG)
+except Exception as e:
+    log.exception(e)
+
 
 class FTPIngestion:
 
@@ -51,7 +61,7 @@ class FTPIngestion:
         :return : Bool; True if connection successfull, False if not
         """
 
-        print('Establishing connection with host...')
+        log.info(f'Establishing connection with host: {self.ftp_host}:{self.ftp_port}')
         try:
             self.ssh_client = paramiko.SSHClient()
             self.ssh_client.set_missing_host_key_policy(
@@ -62,18 +72,18 @@ class FTPIngestion:
 
             self.ssh_client.connect(hostname=self.ftp_host, username=self.ftp_username,
                                     password=self.ftp_password, port=self.ftp_port)
-            print('connected')
+            log.info('connected')
             self.ssh_ok = True
 
         except paramiko.AuthenticationException as AuthFailException:
             self.ssh_ok = False
-            print('Authentication Failed, error: ', AuthFailException)
+            log.error('Authentication Failed, error: %s', AuthFailException)
         except paramiko.SSHException as sshException:
             self.ssh_ok = False
-            print('Could not establish ssh connection, error: ', sshException)
+            log.error('Could not establish ssh connection, error: %s', sshException)
         except Exception as error:
             self.ssh_ok = False
-            print('Error establishing connection, error: ', error)
+            log.error('Error establishing connection, error: %s', error)
 
         return self.ssh_ok
 
@@ -84,19 +94,19 @@ class FTPIngestion:
         """
         try:
             if self.create_ssh_connection():
-                print('Establishing SFTP connection...')
+                log.info('Establishing SFTP connection...')
                 self.sftp_client = self.ssh_client.open_sftp()
-                print('SFTP connection successfull')
+                log.info('SFTP connection successfull')
                 self.sftp_ok = True
             else:
-                print('Could not establish ssh connection')
+                log.error('Could not establish ssh connection')
 
         except paramiko.SFTPError as sftpError:
             self.sftp_ok = False
-            print('could not establish sftp connection, error: ', sftpError)
+            log.error('could not establish sftp connection, error: %s', sftpError)
         except Exception as error:
             self.sftp_ok = False
-            print('could not establish sftp connection, error: ', error)
+            log.error('could not establish sftp connection, error: %s', error)
         return self.sftp_ok
 
     def move_files_to_processed(self, source_file_name):
@@ -107,16 +117,16 @@ class FTPIngestion:
         :param source_file_name: name of the file
         """
 
-        print('moving '+source_file_name+' to processed directory.')
+        log.info('moving ' + source_file_name + ' to processed directory.')
         processed_directory = self.ftp_processed_path
-        src = self.ftp_directory_path+'/' + source_file_name
+        src = self.ftp_directory_path + '/' + source_file_name
         dest = processed_directory + source_file_name
 
         try:
             _, _, _ = self.ssh_client.exec_command(
-                "mv " + src+" " + dest)
+                "mv " + src + " " + dest)
         except Exception as error:
-            print("error moving files to processed directory, error: ", error)
+            log.error("error moving files to processed directory, error: %s", error)
 
     def create_s3_partition(self):
         """
@@ -163,7 +173,7 @@ class FTPIngestion:
                                    s3_target_file, Config=config)
             return True
         except Exception as error:
-            print('could not upload file using multipart upload, error: ', error)
+            log.info('could not upload file using multipart upload, error: ', error)
             return False
 
     def initiate_ingestion(self):
@@ -183,8 +193,8 @@ class FTPIngestion:
                 for ftp_file in files_to_upload:
                     sftp_file_obj = self.sftp_client.file(ftp_file, mode='r')
                     if self.s3_upload_file_multipart(
-                            sftp_file_obj, s3_partition+ftp_file):
-                        print('file uploaded to s3')
+                            sftp_file_obj, s3_partition + ftp_file):
+                        log.info('file uploaded to s3')
                         files_to_move.append(ftp_file)
 
                 # move files from parent dir to processed dir
@@ -192,11 +202,11 @@ class FTPIngestion:
                     for uploaded_file in files_to_move:
                         self.move_files_to_processed(uploaded_file)
                 else:
-                    print("nothing to upload")
+                    log.info("nothing to upload")
             else:
-                print('Could not establish SFTP connection')
+                log.error('Could not establish SFTP connection')
         except Exception as error:
-            print("file ingestion failed, error: ", error)
+            log.error("file ingestion failed, error: ", error)
 
         self.close_connections()
 
@@ -204,7 +214,7 @@ class FTPIngestion:
         """
         This mehtod is used to close the ssh and sftp connections.
         """
-        print('closing connections')
+        log.info('closing connections')
         self.sftp_client.close()
         self.ssh_client.close()
 
